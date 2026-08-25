@@ -1,6 +1,6 @@
-# 🔧 Shell Script Utilities
+# 🔧 shell-hub
 
-A comprehensive suite of shell scripts and aliases designed to streamline development workflows, automate common tasks, and enhance productivity for web development projects.
+A modular collection of shell scripts and aliases for bash/zsh, sourced through a single `hub.sh` entry point via `activate-hub`. Drop it into any project to get git branch management, project navigation, networking helpers, and workflow automation without wiring each script up by hand.
 
 [![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](CHANGELOG.md)
 [![Shell](https://img.shields.io/badge/shell-bash%2Fzsh-green.svg)](setup.sh)

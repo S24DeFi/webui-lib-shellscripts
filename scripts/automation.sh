@@ -354,3 +354,43 @@ alias oct='open reports/cucumber-report.html' #open cucumber report
 
 alias cfe='printf "Drinking coffee\n *>\n" && caffeinate -d' #run coffee
 alias gafe='gitnexus analyze --force --embeddings' #runs the git nexus analyze script with flags
+
+# Refresh a Claude Code plugin marketplace and every plugin installed from it
+# Usage: updateskills [marketplace]   (default: andre-skills)
+updateskills() {
+	local marketplace plugins plugin failed
+
+	marketplace="${1:-andre-skills}"
+	failed=0
+
+	if ! command -v claude >/dev/null 2>&1; then
+		echo "Error: claude command not found" >&2
+		return 1
+	fi
+
+	if ! claude plugin marketplace update "$marketplace"; then
+		echo "Error: failed to update marketplace: $marketplace" >&2
+		return 1
+	fi
+
+	plugins=$(claude plugin list 2>/dev/null | grep -o "[A-Za-z0-9_-]*@${marketplace}" | sort -u)
+	if [ -z "$plugins" ]; then
+		echo "No plugins installed from $marketplace."
+		echo "Install one with: claude plugin install <team>@$marketplace"
+		return 0
+	fi
+
+	# read line-by-line: zsh does not word-split unquoted variables
+	while IFS= read -r plugin; do
+		claude plugin update "$plugin" </dev/null || failed=1
+	done <<EOF
+$plugins
+EOF
+
+	if [ "$failed" -ne 0 ]; then
+		echo "Error: one or more plugins failed to update" >&2
+		return 1
+	fi
+
+	echo "Skills updated. Restart Claude Code to load the new versions."
+}

@@ -120,3 +120,5 @@ yw() {
     yarn test --watch "$1"
 }
 alias pkg="less package.json" #show the content of the package json file
+alias esc="vi .shell-config" #edit the shell config file
+alias egi="vi .gitignore" #edit the git ignore file

@@ -122,3 +122,25 @@ yw() {
 alias pkg="less package.json" #show the content of the package json file
 alias esc="vi .shell-config" #edit the shell config file
 alias egi="vi .gitignore" #edit the git ignore file
+
+
+checknode() {
+    checknode_path="${1:-/opt/homebrew/opt/node@22/bin}"
+
+    if [ "$#" -gt 0 ]; then
+        shift
+    fi
+
+    if [ ! -d "$checknode_path" ]; then
+        echo "Error: Node path not found: $checknode_path" >&2
+        return 1
+    fi
+
+    export PATH="$checknode_path:$PATH"
+
+    if [ "$#" -eq 0 ]; then
+        node -v
+    else
+        "$@"
+    fi
+}

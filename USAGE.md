@@ -124,6 +124,19 @@ syncenv config/.env.sample .env.local
 - Never overwrites values already present in the target file
 - Returns an error if the example file or target file cannot be found
 
+### GitNexus
+
+| Command  | Description                                                              | Example  |
+| -------- | ------------------------------------------------------------------------ | -------- |
+| `gafe`   | Re-index the current repo with embeddings                                | `gafe`   |
+| `gnls`   | List indexed repos with status and embedding counts                      | `gnls`   |
+| `gnweb`  | Start the GitNexus server and web UI from any folder (Ctrl+C stops both) | `gnweb`  |
+| `gnstop` | Stop anything on ports 4747 (server) and 5173 (web UI)                   | `gnstop` |
+
+- `gnls` shows `EMB > 0` when `gafe` has been run on a repo; `no index` means re-run `gafe` there
+- `gnweb` expects the web UI at `~/Developer/webapp-ui-gitnexus/gitnexus-web`; override with `GITNEXUS_WEB_DIR`
+- Newly analyzed repos appear in the web UI after a page refresh, no server restart needed
+
 ## Alternative Usage: Modular Entry Point (hub.sh)
 
 Instead of using `setup.sh` to modify your shell rc files, you can source `hub.sh` directly for project-level or portable usage:

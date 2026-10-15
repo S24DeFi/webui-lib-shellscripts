@@ -263,8 +263,10 @@ Example:
 | `syncenv`          | Append missing env keys from `.env.example`       | `syncenv`                       |
 | `cleanbranches`    | List orphaned git branches (safe preview)         | `cleanbranches`                 |
 | `cleanorphans`     | Delete orphaned local git branches                | `cleanorphans`                  |
+| `cleanlocalbranches` | Delete merged/closed-PR local branches still on remote | `cleanlocalbranches [-y]`  |
 | `myip`             | Get public IP address                             | `myip`                          |
 | `activate-hub`     | Initialize project with .shell-config and skills/ | `activate-hub`                  |
+| `project-shell`    | Check/create project shell + navigation alias     | `project-shell [alias-name]`    |
 | `ticket <number>`  | Open JIRA ticket                                  | `ticket 1234`                   |
 
 ## 📁 Project Structure
@@ -313,6 +315,7 @@ newbranch  # Create and switch to new branch
 gpod       # Push current branch to origin
 cleanbranches  # List orphaned branches (safe preview)
 cleanorphans   # Delete local branches not on remote
+cleanlocalbranches  # Delete finished local branches still on remote (asks first)
 ```
 
 **Enhanced Branch Cleanup** (with configurable protection):

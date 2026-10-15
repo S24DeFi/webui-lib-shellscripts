@@ -1,0 +1,37 @@
+#!/bin/sh
+# Project Shell Configuration
+# Load core utilities and define project-specific settings
+# Usage: source .shell-config (or: . .shell-config)
+# POSIX-compatible: works in sh, bash, zsh
+
+# Detect WEBUI_LIB_PATH (POSIX-compatible, no bash-isms)
+if [ -z "${WEBUI_LIB_PATH:-}" ]; then
+	# Try sibling directory (canonical location in Developer workspace)
+	_script_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || true
+	if [ -f "${_script_dir}/../webui-lib-shellscripts/scripts/hub.sh" ]; then
+		WEBUI_LIB_PATH="${_script_dir}/../webui-lib-shellscripts"
+	elif [ -f "$HOME/Developer/webui-lib-shellscripts/scripts/hub.sh" ]; then
+		WEBUI_LIB_PATH="$HOME/Developer/webui-lib-shellscripts"
+	elif [ -f "$HOME/.local/webui-lib-shellscripts/scripts/hub.sh" ]; then
+		WEBUI_LIB_PATH="$HOME/.local/webui-lib-shellscripts"
+	fi
+	unset _script_dir
+fi
+
+if [ ! -f "$WEBUI_LIB_PATH/scripts/hub.sh" ]; then
+	printf "[.shell-config] Error: Cannot find hub.sh at %s\n" "$WEBUI_LIB_PATH" >&2
+	printf "[.shell-config] Set WEBUI_LIB_PATH to the correct path and try again\n" >&2
+	return 1
+fi
+
+# Load all core utilities (git, network, automation, etc.)
+. "$WEBUI_LIB_PATH/scripts/hub.sh"
+
+# Project-specific configuration (optional)
+# PROJECT_NAME="$(basename "$PWD")"
+# Add your project-specific aliases here:
+# alias build="yarn build"
+# alias test="yarn test --watch"
+# alias serve="yarn dev"
+
+printf "✓ Project hub activated: %s\n" "$(basename "$PWD")"

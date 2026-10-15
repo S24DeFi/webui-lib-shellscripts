@@ -48,6 +48,7 @@ After setup, these are the most commonly used commands:
 | `gpod`          | Push current branch to origin                | `gpod`          |
 | `cleanbranches` | List orphaned local branches (safe preview)  | `cleanbranches` |
 | `cleanorphans`  | Delete orphaned local branches               | `cleanorphans`  |
+| `cleanlocalbranches` | Delete merged/closed-PR local branches still on remote | `cleanlocalbranches [-y]` |
 | `msg`           | Show git status with recent commits          | `msg`           |
 
 #### Branch Cleanup Details

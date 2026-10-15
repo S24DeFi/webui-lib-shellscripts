@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- `gnls` command to list GitNexus-indexed repos with index status and embedding counts
+- `gnweb` command to start the GitNexus server and web UI from any folder
+- `gnstop` command to stop the GitNexus server and web UI
+
 ## [2.4.0] - 2025-11-05
 
 ### Added

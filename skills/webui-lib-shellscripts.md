@@ -28,6 +28,7 @@ skills/
 ## What Goes Here
 
 Use these files to document:
+
 - Project structure and conventions
 - Development workflows
 - Coding patterns

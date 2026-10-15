@@ -251,23 +251,23 @@ Example:
 
 ## 🎮 Most Used Commands
 
-| Command            | Purpose                                           | Example                         |
-| ------------------ | ------------------------------------------------- | ------------------------------- |
-| `go`               | Reload all configurations and refresh the prompt  | `go`                            |
-| `showme <keyword>` | Search for commands                               | `showme git`                    |
-| `list`             | Show all available aliases                        | `list`                          |
-| `msg`              | Git status and recent commits                     | `msg`                           |
-| `app`              | Navigate to workspace                             | `app`                           |
-| `nocors`           | Open Chrome without CORS                          | `nocors`                        |
-| `gar [path]`       | Generate an Allure report                         | `gar ../deployments/webapp-cvu` |
-| `syncenv`          | Append missing env keys from `.env.example`       | `syncenv`                       |
-| `cleanbranches`    | List orphaned git branches (safe preview)         | `cleanbranches`                 |
-| `cleanorphans`     | Delete orphaned local git branches                | `cleanorphans`                  |
-| `cleanlocalbranches` | Delete merged/closed-PR local branches still on remote | `cleanlocalbranches [-y]`  |
-| `myip`             | Get public IP address                             | `myip`                          |
-| `activate-hub`     | Initialize project with .shell-config and skills/ | `activate-hub`                  |
-| `project-shell`    | Check/create project shell + navigation alias     | `project-shell [alias-name]`    |
-| `ticket <number>`  | Open JIRA ticket                                  | `ticket 1234`                   |
+| Command              | Purpose                                                | Example                         |
+| -------------------- | ------------------------------------------------------ | ------------------------------- |
+| `go`                 | Reload all configurations and refresh the prompt       | `go`                            |
+| `showme <keyword>`   | Search for commands                                    | `showme git`                    |
+| `list`               | Show all available aliases                             | `list`                          |
+| `msg`                | Git status and recent commits                          | `msg`                           |
+| `app`                | Navigate to workspace                                  | `app`                           |
+| `nocors`             | Open Chrome without CORS                               | `nocors`                        |
+| `gar [path]`         | Generate an Allure report                              | `gar ../deployments/webapp-cvu` |
+| `syncenv`            | Append missing env keys from `.env.example`            | `syncenv`                       |
+| `cleanbranches`      | List orphaned git branches (safe preview)              | `cleanbranches`                 |
+| `cleanorphans`       | Delete orphaned local git branches                     | `cleanorphans`                  |
+| `cleanlocalbranches` | Delete merged/closed-PR local branches still on remote | `cleanlocalbranches [-y]`       |
+| `myip`               | Get public IP address                                  | `myip`                          |
+| `activate-hub`       | Initialize project with .shell-config and skills/      | `activate-hub`                  |
+| `project-shell`      | Check/create project shell + navigation alias          | `project-shell [alias-name]`    |
+| `ticket <number>`    | Open JIRA ticket                                       | `ticket 1234`                   |
 
 ## 📁 Project Structure
 

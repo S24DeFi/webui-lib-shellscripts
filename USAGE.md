@@ -41,15 +41,15 @@ After setup, these are the most commonly used commands:
 
 ### Git Commands
 
-| Command         | Description                                  | Example         |
-| --------------- | -------------------------------------------- | --------------- |
-| `gcom`          | Checkout and update master branch            | `gcom`          |
-| `newbranch`     | Interactively create and checkout new branch | `newbranch`     |
-| `gpod`          | Push current branch to origin                | `gpod`          |
-| `cleanbranches` | List orphaned local branches (safe preview)  | `cleanbranches` |
-| `cleanorphans`  | Delete orphaned local branches               | `cleanorphans`  |
+| Command              | Description                                            | Example                   |
+| -------------------- | ------------------------------------------------------ | ------------------------- |
+| `gcom`               | Checkout and update master branch                      | `gcom`                    |
+| `newbranch`          | Interactively create and checkout new branch           | `newbranch`               |
+| `gpod`               | Push current branch to origin                          | `gpod`                    |
+| `cleanbranches`      | List orphaned local branches (safe preview)            | `cleanbranches`           |
+| `cleanorphans`       | Delete orphaned local branches                         | `cleanorphans`            |
 | `cleanlocalbranches` | Delete merged/closed-PR local branches still on remote | `cleanlocalbranches [-y]` |
-| `msg`           | Show git status with recent commits          | `msg`           |
+| `msg`                | Show git status with recent commits                    | `msg`                     |
 
 #### Branch Cleanup Details
 

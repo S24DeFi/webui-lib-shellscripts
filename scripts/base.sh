@@ -289,6 +289,102 @@ cleanorphans() {
     printf 'Orphaned branches cleanup complete\n'
 }
 
+# Delete finished local branches that cleanbranches/cleanorphans keep because
+# the remote branch still exists: merged or squash-merged into the default
+# branch, or fully pushed with a merged/closed PR (needs gh).
+# Usage: cleanlocalbranches [-y]   (-y skips the confirmation prompt)
+unalias cleanlocalbranches 2>/dev/null
+cleanlocalbranches() {
+    local remote base current_branch branch upstream worktree reason states mb tmp doomed count reply
+    remote="$SKILLS_GIT_REMOTE"
+
+    git fetch --prune "$remote" || return 1
+
+    # Default branch on the remote (origin/main, origin/master, ...)
+    base=$(git symbolic-ref --quiet --short "refs/remotes/$remote/HEAD" 2>/dev/null)
+    if [ -z "$base" ]; then
+        for branch in main master; do
+            if git show-ref --verify --quiet "refs/remotes/$remote/$branch"; then
+                base="$remote/$branch"
+                break
+            fi
+        done
+    fi
+    if [ -z "$base" ]; then
+        printf 'Could not determine the default branch of %s\n' "$remote"
+        return 1
+    fi
+
+    current_branch=$(git branch --show-current)
+    doomed=""
+    count=0
+
+    while IFS='|' read -r branch upstream worktree; do
+        [ -z "$branch" ] && continue
+        # Skip current, protected, default, and anything checked out in a worktree
+        [ "$branch" = "$current_branch" ] && continue
+        [ "$branch" = "${base#"$remote"/}" ] && continue
+        [ -n "$worktree" ] && continue
+        if _git_is_protected "$branch"; then
+            continue
+        fi
+
+        reason=""
+        if git merge-base --is-ancestor "$branch" "$base" 2>/dev/null; then
+            reason="merged into $base"
+        else
+            # Squash merge: the branch's combined diff already exists as one commit on base
+            mb=$(git merge-base "$base" "$branch" 2>/dev/null)
+            if [ -n "$mb" ]; then
+                tmp=$(git commit-tree "$branch^{tree}" -p "$mb" -m _ 2>/dev/null)
+                case "$(git cherry "$base" "$tmp" 2>/dev/null)" in
+                    -*) reason="squash-merged into $base" ;;
+                esac
+            fi
+        fi
+
+        # Still on the remote with nothing unpushed: safe to drop once its PR is no longer open
+        if [ -z "$reason" ] && [ -n "$upstream" ] && command -v gh >/dev/null 2>&1 \
+            && git show-ref --verify --quiet "refs/remotes/$upstream" \
+            && [ "$(git rev-list --count "$upstream..$branch" 2>/dev/null)" = "0" ]; then
+            states=$(gh pr list --head "$branch" --state all --json state --jq '.[].state' </dev/null 2>/dev/null)
+            case "$states" in
+                *OPEN*) ;;
+                *MERGED*) reason="PR merged, still on $remote" ;;
+                *CLOSED*) reason="PR closed, still on $remote" ;;
+            esac
+        fi
+
+        if [ -n "$reason" ]; then
+            printf '  %s  (%s)\n' "$branch" "$reason"
+            doomed="${doomed}${branch}
+"
+            count=$((count + 1))
+        fi
+    done < <(git for-each-ref refs/heads/ --format='%(refname:short)|%(upstream:short)|%(worktreepath)' 2>/dev/null)
+
+    if [ "$count" -eq 0 ]; then
+        printf 'No finished local branches found.\n'
+        return 0
+    fi
+
+    if [ "$1" != "-y" ]; then
+        printf '\nDelete these %d local branch(es)? [y/N] ' "$count"
+        read -r reply
+        case "$reply" in
+            y|Y|yes) ;;
+            *) printf 'Nothing deleted.\n'; return 0 ;;
+        esac
+    fi
+
+    while IFS= read -r branch; do
+        [ -z "$branch" ] && continue
+        git branch -D "$branch" >/dev/null && printf 'Deleted: %s\n' "$branch"
+    done <<EOF
+$doomed
+EOF
+}
+
 # Existing git aliases (names preserved)
 alias cleanprune='git config --get-all branch.master.remote' #config clean up prune
 alias gbr='git br' #git branch info
@@ -384,35 +480,46 @@ activate-hub() {
 # Usage: source .shell-config (or: . .shell-config)
 # POSIX-compatible: works in sh, bash, zsh
 
-# Detect WEBUI_LIB_PATH (POSIX-compatible, no bash-isms)
-if [ -z "${WEBUI_LIB_PATH:-}" ]; then
-	# Try sibling directory (canonical location in Developer workspace)
-	_script_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || true
-	if [ -f "${_script_dir}/../webui-lib-shellscripts/scripts/hub.sh" ]; then
-		WEBUI_LIB_PATH="${_script_dir}/../webui-lib-shellscripts"
-	elif [ -f "$HOME/Developer/webui-lib-shellscripts/scripts/hub.sh" ]; then
-		WEBUI_LIB_PATH="$HOME/Developer/webui-lib-shellscripts"
-	elif [ -f "$HOME/.local/webui-lib-shellscripts/scripts/hub.sh" ]; then
-		WEBUI_LIB_PATH="$HOME/.local/webui-lib-shellscripts"
+# Load core utilities unless the hub is already loaded in this shell
+if [ -z "${SKILLS_ROOT:-}" ]; then
+	# Detect WEBUI_LIB_PATH (POSIX-compatible, no bash-isms)
+	if [ -z "${WEBUI_LIB_PATH:-}" ]; then
+		# Try sibling directory (canonical location in Developer workspace)
+		_script_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || true
+		if [ -f "${_script_dir}/../webui-lib-shellscripts/scripts/hub.sh" ]; then
+			WEBUI_LIB_PATH="${_script_dir}/../webui-lib-shellscripts"
+		elif [ -f "$HOME/Developer/webui-lib-shellscripts/scripts/hub.sh" ]; then
+			WEBUI_LIB_PATH="$HOME/Developer/webui-lib-shellscripts"
+		elif [ -f "$HOME/.local/webui-lib-shellscripts/scripts/hub.sh" ]; then
+			WEBUI_LIB_PATH="$HOME/.local/webui-lib-shellscripts"
+		fi
+		unset _script_dir
 	fi
-	unset _script_dir
+
+	if [ ! -f "$WEBUI_LIB_PATH/scripts/hub.sh" ]; then
+		printf "[.shell-config] Error: Cannot find hub.sh at %s\n" "$WEBUI_LIB_PATH" >&2
+		printf "[.shell-config] Set WEBUI_LIB_PATH to the correct path and try again\n" >&2
+		return 1
+	fi
+
+	# Load all core utilities (git, network, automation, etc.)
+	. "$WEBUI_LIB_PATH/scripts/hub.sh"
 fi
 
-if [ ! -f "$WEBUI_LIB_PATH/scripts/hub.sh" ]; then
-	printf "[.shell-config] Error: Cannot find hub.sh at %s\n" "$WEBUI_LIB_PATH" >&2
-	printf "[.shell-config] Set WEBUI_LIB_PATH to the correct path and try again\n" >&2
-	return 1
-fi
-
-# Load all core utilities (git, network, automation, etc.)
-. "$WEBUI_LIB_PATH/scripts/hub.sh"
-
-# Project-specific configuration (optional)
+# ============================================================================
+# PROJECT ALIASES — quick template, uncomment or add your own below
+# ============================================================================
+# Pattern: alias <name>='<command>' #what it does
 # PROJECT_NAME="$(basename "$PWD")"
-# Add your project-specific aliases here:
-# alias build="yarn build"
-# alias test="yarn test --watch"
-# alias serve="yarn dev"
+# alias build='yarn build' #build the project
+# alias test='yarn test --watch' #run tests in watch mode
+# alias serve='yarn dev' #start the dev server
+#
+# Need arguments? Use a function instead:
+# deploy() { yarn deploy "${1:-staging}"; }
+#
+# Navigation to this project from anywhere lives in personal.sh — run
+# project-shell to register it (e.g. alias myproject='app && cd myproject')
 
 printf "✓ Project hub activated: %s\n" "$(basename "$PWD")"
 EOF
@@ -491,6 +598,91 @@ SKILLEOF
     printf "  3. showme help                   # Discover available commands\n"
     printf "\nTo activate in future sessions:\n"
     printf "  cd %s && source .shell-config\n" "$project_name"
+}
+
+# ============================================================================
+# Check the current project for a project-specific shell, create it if missing,
+# and register a navigation alias for the project
+# Usage: project-shell [alias-name]   (alias name defaults to the project folder)
+# Checks:  .shell-config at the project root (git root, else current directory)
+# Creates: .shell-config + skills/ via activate-hub when missing
+#          alias <name>='app && cd <project>' in personal.sh (available everywhere)
+
+project-shell() {
+    local project_dir project_name alias_name nav_cmd personal_file
+
+    project_dir="$(git rev-parse --show-toplevel 2>/dev/null)" || project_dir="$(pwd)"
+    project_name="$(basename "$project_dir")"
+    alias_name="${1:-$project_name}"
+
+    case "$alias_name" in
+        "" | *[!A-Za-z0-9_.-]*)
+            printf "[project-shell] Error: '%s' is not a usable alias name\n" "$alias_name" >&2
+            printf "Usage: project-shell [alias-name]\n" >&2
+            return 1
+            ;;
+    esac
+
+    case "$project_dir" in
+        *[\'\"\$\`\\]*)
+            printf "[project-shell] Error: project path has characters that cannot be aliased safely: %s\n" "$project_dir" >&2
+            return 1
+            ;;
+    esac
+
+    # Project shell: report it, or scaffold it with activate-hub
+    if [ -f "$project_dir/.shell-config" ]; then
+        printf "Project shell already in place: %s\n" "$project_dir/.shell-config"
+    else
+        printf "No project shell found for %s — creating one\n" "$project_name"
+        (cd "$project_dir" && activate-hub) || return 1
+    fi
+
+    # Navigation alias: goes through `app` when the project sits in $Workspace
+    if [ -n "$Workspace" ] && [ "$project_dir" = "${Workspace%/}/$project_name" ]; then
+        nav_cmd="app && cd \"$project_name\""
+    else
+        nav_cmd="cd \"$project_dir\""
+    fi
+
+    if [ -n "$BashShells" ] && [ -d "$BashShells/scripts" ]; then
+        personal_file="$BashShells/scripts/personal.sh"
+    elif [ -n "$SKILLS_ROOT" ] && [ -d "$SKILLS_ROOT" ]; then
+        personal_file="$SKILLS_ROOT/personal.sh"
+    else
+        personal_file=""
+    fi
+
+    if [ -n "$personal_file" ] && [ -f "$personal_file" ] && grep -qF "alias ${alias_name}=" "$personal_file"; then
+        printf "Navigation alias already in place: %s\n" "$alias_name"
+    elif command -v "$alias_name" > /dev/null 2>&1; then
+        printf "[project-shell] '%s' is already a command — skipping the navigation alias\n" "$alias_name" >&2
+        printf "[project-shell] Pick another name: project-shell <alias-name>\n" >&2
+    elif [ -z "$personal_file" ]; then
+        # shellcheck disable=SC2139 # expanding nav_cmd now is intended
+        alias "$alias_name=$nav_cmd"
+        printf "Navigation alias set for this session only (alias library path is not configured): %s\n" "$alias_name"
+    else
+        [ -f "$personal_file" ] || printf '#!/bin/sh\n# personal.sh — Personal, gitignored utilities and machine-specific overrides.\n' > "$personal_file"
+        # Keep appended lines off the end of an unterminated last line
+        [ -z "$(tail -c 1 "$personal_file")" ] || printf '\n' >> "$personal_file"
+        if ! grep -qF "# PROJECT NAVIGATION (managed by project-shell)" "$personal_file"; then
+            {
+                printf '\n# ============================================================================\n'
+                printf '# PROJECT NAVIGATION (managed by project-shell)\n'
+                printf '# ============================================================================\n'
+            } >> "$personal_file"
+        fi
+        printf "alias %s='%s' #navigate to the %s project\n" "$alias_name" "$nav_cmd" "$project_name" >> "$personal_file"
+        # shellcheck disable=SC2139 # expanding nav_cmd now is intended
+        alias "$alias_name=$nav_cmd"
+        printf "Navigation alias added: %s => %s\n" "$alias_name" "$nav_cmd"
+        printf "  Saved to: %s\n" "$personal_file"
+    fi
+
+    # Load the project's own aliases into this shell
+    # shellcheck disable=SC1091 # project file, resolved at runtime
+    . "$project_dir/.shell-config"
 }
 
 apply_shell_prompt

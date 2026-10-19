@@ -24,7 +24,7 @@ jobs:
     name: ShellCheck Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Install ShellCheck
         run: sudo apt-get install -y shellcheck
@@ -42,7 +42,7 @@ jobs:
     name: Markdown Formatting (Prettier)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check markdown formatting
         run: npx --yes prettier@3.3.3 --check "**/*.md"
@@ -51,7 +51,7 @@ jobs:
     name: Bash/POSIX Syntax Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Check bash syntax
         run: |
@@ -71,7 +71,7 @@ jobs:
     name: Repository Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Run validation script
         run: bash validate.sh
@@ -103,7 +103,7 @@ jobs:
     name: Security & PII Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Check for hardcoded personal info
         run: |
@@ -131,7 +131,7 @@ jobs:
     name: Test activate-hub
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Test activate-hub functionality
         run: |
@@ -159,7 +159,7 @@ jobs:
     name: Verify hub.sh Integration
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Test hub.sh sourcing
         run: |

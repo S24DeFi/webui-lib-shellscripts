@@ -355,6 +355,94 @@ alias oct='open reports/cucumber-report.html' #open cucumber report
 alias cfe='printf "Drinking coffee\n *>\n" && caffeinate -d' #run coffee
 alias gafe='gitnexus analyze --force --embeddings' #runs the git nexus analyze script with flags
 
+# List GitNexus-registered repos with index status and embedding counts (emb > 0 = gafe was run)
+# Usage: gnls
+gnls() {
+	local registry
+
+	registry="${GITNEXUS_HOME:-$HOME/.gitnexus}/registry.json"
+
+	if ! command -v node >/dev/null 2>&1; then
+		echo "Error: node command not found" >&2
+		return 1
+	fi
+
+	if [ ! -f "$registry" ]; then
+		echo "No GitNexus registry found at $registry"
+		echo "Index a repo with: gafe"
+		return 0
+	fi
+
+	node -e '
+		const fs = require("fs");
+		const path = require("path");
+		const repos = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+		const rows = repos.map((r) => {
+			const dir = r.storagePath || path.join(r.path, ".gitnexus");
+			let stats = {};
+			try { stats = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")).stats || {}; } catch {}
+			let status = "ready";
+			if (fs.existsSync(path.join(dir, "analyze.lock"))) status = "indexing";
+			else if (!fs.existsSync(path.join(dir, "lbug"))) status = "no index";
+			return [r.name, status, (r.indexedAt || "").slice(0, 10), String(stats.embeddings || 0), String(stats.nodes || 0), r.path];
+		});
+		const head = ["NAME", "STATUS", "INDEXED", "EMB", "SYMBOLS", "PATH"];
+		const widths = head.map((h, i) => Math.max(h.length, ...rows.map((row) => row[i].length)));
+		for (const row of [head, ...rows]) {
+			console.log(row.map((c, i) => (i === row.length - 1 ? c : c.padEnd(widths[i]))).join("  "));
+		}
+	' "$registry"
+}
+
+# Start the GitNexus web UI with the local server, from any folder (Ctrl+C stops both)
+# Usage: gnweb   (override location with GITNEXUS_WEB_DIR)
+gnweb() {
+	local web_dir
+
+	web_dir="${GITNEXUS_WEB_DIR:-$HOME/Developer/webapp-ui-gitnexus/gitnexus-web}"
+
+	if [ ! -f "$web_dir/package.json" ]; then
+		echo "Error: gitnexus-web not found at $web_dir" >&2
+		echo "Set GITNEXUS_WEB_DIR to the correct path and try again" >&2
+		return 1
+	fi
+
+	if ! command -v gitnexus >/dev/null 2>&1; then
+		echo "Error: gitnexus command not found (install with: npm install -g gitnexus)" >&2
+		return 1
+	fi
+
+	(
+		server_pid=""
+		if curl -s -m 2 -o /dev/null http://127.0.0.1:4747/api/repos; then
+			echo "GitNexus server already running on http://127.0.0.1:4747"
+		else
+			echo "Starting GitNexus server on http://127.0.0.1:4747 (log: ~/.gitnexus/serve.log)"
+			gitnexus serve --host 127.0.0.1 >"$HOME/.gitnexus/serve.log" 2>&1 &
+			server_pid=$!
+			trap '[ -n "$server_pid" ] && kill "$server_pid" 2>/dev/null' EXIT INT TERM
+		fi
+
+		cd "$web_dir" && npm run dev -- --open
+	)
+}
+
+# Stop the GitNexus server (4747) and the gitnexus-web dev server (5173)
+# Usage: gnstop
+gnstop() {
+	local port pids
+
+	for port in 4747 5173; do
+		pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null)
+		if [ -n "$pids" ]; then
+			# shellcheck disable=SC2086
+			kill $pids && echo "Stopped server on port $port"
+		else
+			echo "Nothing running on port $port"
+		fi
+	done
+}
+
 # Refresh a Claude Code plugin marketplace and every plugin installed from it
 # Usage: updateskills [marketplace]   (default: andre-skills)
 updateskills() {

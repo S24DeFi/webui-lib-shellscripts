@@ -482,3 +482,234 @@ EOF
 
 	echo "Skills updated. Restart Claude Code to load the new versions."
 }
+
+# Symlink skills from ~/.agents/skills (Cursor/ChatGPT) into ~/.claude/skills
+# Skips names Claude already has and prunes links whose agents skill was removed
+# Usage: syncskills [-n]   (-n: dry run, only list what is missing)
+# Env: AGENTS_SKILLS_DIR, CLAUDE_SKILLS_DIR override the default folders
+#      SKILLS_SYNC_IGNORE — space-separated skill names never linked
+#      (default: Cursor/Codex-only skills and names that clash with Claude built-ins)
+SKILLS_SYNC_IGNORE="${SKILLS_SYNC_IGNORE:-update-cursor-settings create-rule migrate-to-skills \
+canvas create-hook create-skill create-subagent loop new-repo onboard origin rename-chat \
+sdk share statusline update-cli-config review review-bugbot review-security automate goal shell}"
+syncskills() {
+	local src dest dry_run skill name target linked missing pruned
+
+	src="${AGENTS_SKILLS_DIR:-$HOME/.agents/skills}"
+	dest="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+	dry_run=0
+	linked=0
+	missing=0
+	pruned=0
+
+	case "${1:-}" in
+	-n | --dry-run | --list) dry_run=1 ;;
+	"") ;;
+	*)
+		echo "Usage: syncskills [-n]" >&2
+		return 1
+		;;
+	esac
+
+	if [ ! -d "$src" ]; then
+		echo "Error: agents skills folder not found: $src" >&2
+		return 1
+	fi
+	mkdir -p "$dest" || return 1
+
+	# find instead of a glob: zsh errors on globs that match nothing
+	while IFS= read -r skill; do
+		[ -f "$skill/SKILL.md" ] || continue
+		name="$(basename "$skill")"
+		# padded match: zsh does not word-split unquoted variables
+		case " $SKILLS_SYNC_IGNORE " in
+		*" $name "*) continue ;;
+		esac
+		if [ -e "$dest/$name" ] || [ -L "$dest/$name" ]; then
+			continue
+		fi
+		missing=$((missing + 1))
+		if [ "$dry_run" -eq 1 ]; then
+			printf '  missing: %s\n' "$name"
+		elif ln -s "$skill" "$dest/$name"; then
+			printf '  linked:  %s\n' "$name"
+			linked=$((linked + 1))
+		fi
+	done <<EOF
+$(find "$src" -mindepth 1 -maxdepth 1 \( -type d -o -type l \) | sort)
+EOF
+
+	# Remove dangling links that pointed into the agents folder
+	while IFS= read -r skill; do
+		[ -n "$skill" ] || continue
+		[ -e "$skill" ] && continue
+		target="$(readlink "$skill")"
+		case "$target" in
+		"$src"/*) ;;
+		*) continue ;;
+		esac
+		if [ "$dry_run" -eq 1 ]; then
+			printf '  stale:   %s\n' "$(basename "$skill")"
+		elif rm "$skill"; then
+			printf '  pruned:  %s\n' "$(basename "$skill")"
+			pruned=$((pruned + 1))
+		fi
+	done <<EOF
+$(find "$dest" -mindepth 1 -maxdepth 1 -type l)
+EOF
+
+	if [ "$dry_run" -eq 1 ]; then
+		printf '%d skill(s) in %s not available to Claude. Run syncskills to link them.\n' "$missing" "$src"
+	else
+		printf 'Linked %d, pruned %d. Restart Claude Code to load new skills.\n' "$linked" "$pruned"
+	fi
+}
+
+alias missingskills='syncskills -n' #list ~/.agents skills Claude Code cannot see
+
+# Print "source<TAB>folder" for every skill folder that exists on this machine
+# Env: SKILLS_EXTRA_DIRS — extra "source:path" pairs, space-separated
+_skill_roots() {
+	local pair label dir manifest
+
+	for pair in \
+		"claude:$HOME/.claude/skills" \
+		"agents:$HOME/.agents/skills" \
+		"codex:$HOME/.codex/skills" \
+		"cursor:$HOME/.cursor/skills" \
+		"cursor:$HOME/.cursor/skills-cursor" \
+		"project:$PWD/.claude/skills" \
+		"project:$PWD/.agents/skills"; do
+		label="${pair%%:*}"
+		dir="${pair#*:}"
+		[ -d "$dir" ] && printf '%s\t%s\n' "$label" "$dir"
+	done
+
+	# padded loop input: zsh does not word-split unquoted variables
+	printf '%s\n' "${SKILLS_EXTRA_DIRS:-}" | tr ' ' '\n' | while IFS= read -r pair; do
+		[ -n "$pair" ] || continue
+		label="${pair%%:*}"
+		dir="${pair#*:}"
+		[ -d "$dir" ] && printf '%s\t%s\n' "$label" "$dir"
+	done
+
+	# Claude Code plugins: only the installed version of each, not the whole cache
+	manifest="$HOME/.claude/plugins/installed_plugins.json"
+	[ -f "$manifest" ] || return 0
+	if command -v jq >/dev/null 2>&1; then
+		jq -r '.plugins | to_entries[] | (.key | split("@")[0]) as $p | .value[] | "plugin:\($p)\t\(.installPath)/skills"' "$manifest" 2>/dev/null
+	elif command -v python3 >/dev/null 2>&1; then
+		python3 -I -c 'import json,sys
+for k,v in json.load(open(sys.argv[1]))["plugins"].items():
+    for e in v: print("plugin:%s\t%s/skills" % (k.split("@")[0], e["installPath"]))' "$manifest" 2>/dev/null
+	fi | while IFS="$(printf '\t')" read -r label dir; do
+		[ -d "$dir" ] && printf '%s\t%s\n' "$label" "$dir"
+	done
+}
+
+# Print "name<TAB>source<TAB>SKILL.md path<TAB>description" for every skill found
+_skill_index() {
+	local label dir file name
+
+	_skill_roots | while IFS="$(printf '\t')" read -r label dir; do
+		find -L "$dir" -maxdepth 4 -name SKILL.md 2>/dev/null | sort | while IFS= read -r file; do
+			# Read name/description from the YAML frontmatter, including folded (>-) descriptions
+			awk -v dirname="$(basename "$(dirname "$file")")" '
+				{ sub(/\r$/, "") }
+				NR == 1 && $0 != "---" { exit }
+				NR > 1 && $0 == "---" { exit }
+				/^name:/ { sub(/^name:[ \t]*/, ""); name = $0; fold = 0; next }
+				/^description:/ {
+					sub(/^description:[ \t]*/, "")
+					desc = ($0 ~ /^[>|][-+]?$/) ? "" : $0
+					fold = 1
+					next
+				}
+				fold && /^[ \t]/ { sub(/^[ \t]+/, ""); desc = desc (desc == "" ? "" : " ") $0; next }
+				{ fold = 0 }
+				END {
+					gsub(/^["\047]|["\047]$/, "", name)
+					gsub(/^["\047]|["\047]$/, "", desc)
+					gsub(/\t/, " ", desc)
+					printf "%s\t%s\n", (name == "" ? dirname : name), desc
+				}' "$file" | while IFS="$(printf '\t')" read -r name desc; do
+				case "$label" in
+				plugin:*) name="${label#plugin:}:$name" ;;
+				esac
+				printf '%s\t%s\t%s\t%s\n' "$name" "$label" "$file" "$desc"
+			done
+		done
+	done
+}
+
+# List every skill on this computer (Claude, ~/.agents, Codex, Cursor, plugins)
+# Usage: listskills [keyword]   (keyword filters name, source and description)
+listskills() {
+	local width broken
+
+	width="${COLUMNS:-120}"
+	_skill_index | sort -f | awk -F '\t' -v width="$width" -v q="${1:-}" '
+		BEGIN { printf "%-34s %-18s %s\n", "SKILL", "SOURCE", "DESCRIPTION"; q = tolower(q) }
+		q != "" && index(tolower($1 " " $2 " " $4), q) == 0 { next }
+		{
+			room = width - 55
+			if (room < 20) room = 20
+			d = $4
+			if (length(d) > room) d = substr(d, 1, room - 3) "..."
+			printf "%-34s %-18s %s\n", $1, $2, d
+			n++
+		}
+		END { printf "\n%d skill(s). Claude Code sees: claude, plugin:*, project.\n", n }'
+
+	# Flag skill links in Claude's folder whose target no longer exists
+	broken="$(find "$HOME/.claude/skills" -maxdepth 2 -type l ! -exec test -e {} \; -print 2>/dev/null)"
+	if [ -n "$broken" ]; then
+		echo "Broken skill links (target missing):"
+		printf '%s\n' "$broken" | sed 's/^/  /'
+	fi
+}
+
+# Show full details for a skill by name
+# Usage: skilldetails <name> [-f]   (-f: also print the whole SKILL.md)
+skilldetails() {
+	local query full matches
+
+	query="$1"
+	full="${2:-}"
+	if [ -z "$query" ]; then
+		echo "Usage: skilldetails <name> [-f]" >&2
+		echo "Example: skilldetails email-follow-up" >&2
+		return 1
+	fi
+
+	# Match the exact name, or the skill part of a plugin:skill name
+	matches="$(_skill_index | awk -F '\t' -v q="$query" '$1 == q || $1 ~ (":" q "$")')"
+	if [ -z "$matches" ]; then
+		echo "No skill named '$query'. Try: listskills $query" >&2
+		return 1
+	fi
+
+	printf '%s\n' "$matches" | while IFS="$(printf '\t')" read -r name label file desc; do
+		echo "$name"
+		printf '  Source:      %s\n' "$label"
+		printf '  File:        %s\n' "$file"
+		if [ -L "$(dirname "$file")" ]; then
+			printf '  Links to:    %s\n' "$(readlink "$(dirname "$file")")"
+		fi
+		case "$label" in
+		claude | plugin:* | project) printf '  Claude Code: yes\n' ;;
+		agents) printf '  Claude Code: no (run syncskills to link it)\n' ;;
+		*) printf '  Claude Code: no\n' ;;
+		esac
+		if grep -q '^disable-model-invocation: *true' "$file"; then
+			printf '  Invocation:  manual only (/%s)\n' "${name##*:}"
+		fi
+		printf '%s\n' "$desc" | fold -s -w "$((${COLUMNS:-100} - 16))" |
+			sed -e '1s/^/  Description: /' -e '2,$s/^/               /'
+		if [ "$full" = "-f" ]; then
+			echo
+			cat "$file"
+		fi
+		echo
+	done
+}
